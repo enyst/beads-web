@@ -13,7 +13,7 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
   3) Detect channel (Slack channel id/name).
   4) Detect the most likely repository among `OpenHands/OpenHands`, `OpenHands/software-agent-sdk`, `OpenHands/OpenHands-CLI`, `OpenHands/benchmarks`.
 - Persist structured JSON for messages and threads with classification output and routing metadata.
-- For threads without an answer, open a GitHub issue in the most likely repo, introduce the reporter as `smolpaws`, and add a :+1: reaction on the original Slack message.
+- For threads without an answer, open a GitHub issue in the most likely repo, introduce the reporter as `${SLACK_TRIAGE_BOT_NAME}` (configurable), and add a :+1: reaction on the original Slack message.
 
 ## Non-goals
 - Building a Slack UI, slash commands, or interactive components.
@@ -21,14 +21,14 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 
 ## References
 - Slack Events API overview and HTTP-based event delivery: <https://docs.slack.dev/apis/events-api/>
-- GitHub OAuth app authorization (web + device flows): <https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps>
+- GitHub App installation/auth: <https://docs.github.com/en/apps/creating-github-apps/using-github-apps>
 
 ## Architecture
 
 ### Components
 1. **FastAPI web server**
    - Handles Slack Events API requests.
-   - Exposes GitHub OAuth endpoints (auth + callback) to get user or bot tokens for issue creation.
+   - Exposes GitHub App install/handshake endpoints to obtain installation tokens for issue creation.
 2. **Background worker / queue**
    - Ensures Slack request handling is fast (ack within 3s).
    - Deduplicates events and processes classification + issue creation asynchronously.
@@ -42,10 +42,10 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 3. Server returns `200 OK` immediately, enqueues processing job.
 4. Worker loads thread context and channels metadata (if required), runs LLM classification, stores results, and potentially creates GitHub issues.
 
-### Request Flow (GitHub OAuth)
-1. Admin visits `/github/login` → redirects to GitHub OAuth `authorize` endpoint.
-2. GitHub returns to `/github/callback` with `code` → server exchanges for access token.
-3. Token is stored securely and used for issue creation.
+### Request Flow (GitHub App)
+1. Admin installs the GitHub App in the target org/repositories.
+2. Service exchanges the app's JWT for an installation token when it needs to create issues.
+3. Installation token is used for issue creation and refreshed as needed.
 
 ## Slack Integration
 
@@ -95,7 +95,7 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 ### Issue Creation Policy
 - Pick the most likely repo based on LLM classification + heuristics.
 - Create issue with intro:
-  - Start issue body with: `Hi, I’m smolpaws and I’m summarizing a Slack discussion from Liberty Labs.`
+  - Start issue body with: `Hi, I’m ${SLACK_TRIAGE_BOT_NAME} and I’m summarizing a Slack discussion from ${SLACK_WORKSPACE_NAME}.`
 - Add a link back to Slack thread permalink.
 
 ### Reactions to Slack
@@ -153,7 +153,7 @@ A thread is “unanswered” when:
 - The thread does not already have a linked GitHub issue in storage.
 
 ### Suggested Heuristics
-- Maintain a list of maintainer Slack user ids.
+- Maintain a list of maintainer Slack user ids (e.g., `MAINTAINER_SLACK_IDS` as a comma-separated env var).
 - Consider any reply over a length threshold (e.g., 50 chars) as substantive.
 - Allow manual override via an allowlist/denylist in config.
 
@@ -203,9 +203,9 @@ A thread is “unanswered” when:
   - Validates signature.
   - Enqueues processing job.
 
-### GitHub OAuth
-- `GET /github/login` → redirects to GitHub OAuth authorize endpoint.
-- `GET /github/callback` → exchanges code for token, stores token.
+### GitHub App
+- `GET /github/install` → redirects to GitHub App installation.
+- `POST /github/refresh` → refreshes installation token as needed.
 
 ### Health
 - `GET /healthz` → simple uptime check.
@@ -222,7 +222,9 @@ A thread is “unanswered” when:
 - `SLACK_BOT_TOKEN`
 - `SLACK_APP_TOKEN` (if Socket Mode is later added)
 - `LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`
+- `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, `GITHUB_PRIVATE_KEY`
+- `SLACK_TRIAGE_BOT_NAME`, `SLACK_WORKSPACE_NAME`
+- `MAINTAINER_SLACK_IDS`
 - `DATABASE_URL`
 
 ## Observability
@@ -231,5 +233,5 @@ A thread is “unanswered” when:
 
 ## Security Considerations
 - Verify Slack signatures and replay timestamps.
-- Store OAuth tokens encrypted at rest.
+- Store GitHub App private key and installation tokens securely (encrypt at rest).
 - Avoid logging message content unless redacted.
