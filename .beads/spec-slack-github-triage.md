@@ -3,10 +3,10 @@
 Source: OpenHands-Tab PR #944 (diff captured from `docs/slack-github-triage-spec.md`).
 
 ## Summary
-Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for the Liberty Labs workspace and ingests channel + thread messages. It classifies content with an LLM, stores structured JSON records, and creates GitHub issues for unanswered threads in the most likely OpenHands repository. It then reacts to the original Slack post with :+1: to indicate completion.
+Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for the configured Slack workspace (default: Liberty Labs) and ingests channel + thread messages. It classifies content with an LLM, stores structured JSON records, and creates GitHub issues for unanswered threads in the most likely OpenHands repository. It then reacts to the original Slack post with :+1: to indicate completion.
 
 ## Goals
-- Receive Slack Events API message payloads for channels in the Liberty Labs workspace and correctly parse message + thread structures.
+- Receive Slack Events API message payloads for channels in the configured workspace and correctly parse message + thread structures.
 - Use an LLM (env vars: `LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`) to:
   1) Filter out low-content messages (e.g., “lol”, “ok”).
   2) Classify messages into categories: bug report, support request, feature request, agent research discussion, architecture / code design / refactoring / invariants discussion.
@@ -44,8 +44,9 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 
 ### Request Flow (GitHub App)
 1. Admin installs the GitHub App in the target org/repositories.
-2. Service exchanges the app's JWT for an installation token when it needs to create issues.
-3. Installation token is used for issue creation and refreshed as needed.
+2. GitHub redirects to a setup callback endpoint with the installation ID.
+3. Service stores the installation ID and exchanges the app's JWT for an installation token when it needs to create issues.
+4. Installation tokens are short-lived and generated on demand for issue creation.
 
 ## Slack Integration
 
@@ -88,6 +89,7 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
   - `GITHUB_APP_ID`
   - `GITHUB_INSTALLATION_ID`
   - `GITHUB_PRIVATE_KEY`
+- App installation tokens are created on demand (no refresh flow).
 
 ### Required App Permissions
 - `issues: write` (to create issues in repositories where the app is installed)
@@ -97,6 +99,7 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 - Create issue with intro:
   - Start issue body with: `Hi, I’m ${SLACK_TRIAGE_BOT_NAME} and I’m summarizing a Slack discussion from ${SLACK_WORKSPACE_NAME}.`
 - Add a link back to Slack thread permalink.
+- Skip issue creation if the thread is low-content or explicitly classified as "no-issue".
 
 ### Reactions to Slack
 - After successful issue creation, add `:+1:` reaction to the root Slack message.
@@ -149,6 +152,7 @@ LLM should return JSON with:
 ### Definition
 A thread is “unanswered” when:
 - The root message is not authored by the bot.
+- The thread is older than a minimum age threshold (e.g., 2 hours) to allow human replies.
 - No reply in the thread is authored by a maintainer or bot and contains substantive content.
 - The thread does not already have a linked GitHub issue in storage.
 
@@ -174,6 +178,13 @@ A thread is “unanswered” when:
   "created_at": "2025-01-01T00:00:00Z"
 }
 ```
+
+## Data Retention & Redaction
+- Retain message `text` fields for a limited window (e.g., 30-90 days) and delete or redact afterward.
+- Use `created_at`/`updated_at` timestamps to enforce retention policies on message and thread records.
+- Redact common PII before persistence where possible (emails, phone numbers) and avoid logging raw text unless necessary.
+- Support manual deletion/export requests by deleting or exporting records keyed by `slack_event_id` or `slack_thread_ts`.
+
 
 ### Thread Record
 ```json
@@ -205,7 +216,8 @@ A thread is “unanswered” when:
 
 ### GitHub App
 - `GET /github/install` → redirects to GitHub App installation.
-- `POST /github/refresh` → refreshes installation token as needed.
+- `GET /github/callback` → receives installation callback and stores installation ID.
+- `POST /github/token` → generates a new installation token on demand.
 
 ### Health
 - `GET /healthz` → simple uptime check.
@@ -226,6 +238,12 @@ A thread is “unanswered” when:
 - `SLACK_TRIAGE_BOT_NAME`, `SLACK_WORKSPACE_NAME`
 - `MAINTAINER_SLACK_IDS`
 - `DATABASE_URL`
+
+
+## Rate Limiting & Backoff
+- Apply exponential backoff with jitter for Slack, GitHub, and LLM calls.
+- Cap retries with a max attempt budget and log failures for manual review.
+- Prefer honoring `Retry-After` headers where available.
 
 ## Observability
 - Log request ids, Slack event ids, GitHub issue ids.

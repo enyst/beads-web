@@ -8,7 +8,7 @@
 
 ### Phase 0: Product/infra decisions
 1. Confirm deploy target (container + platform) and URL used for Slack Events API request URL.
-2. Decide on GitHub auth: spec mentions **GitHub App**, but also lists OAuth env vars. Recommend standardize on GitHub App install flow and drop OAuth unless explicitly needed.
+2. Confirm GitHub auth will use a GitHub App install flow (no OAuth app).
 3. Choose storage: start with SQLite for local/dev, Postgres in production (migrations via Alembic).
 4. Confirm LLM provider strategy (OpenAI/Anthropic/etc) and client library.
 
@@ -40,17 +40,17 @@
 2. Select repo candidate (classification confidence + heuristics).
 3. Create GitHub issue via GitHub App installation token.
 4. Persist issue link and mark thread answered.
-5. Add `:+1:` reaction to root Slack message.
+5. Add `:+1:` reaction to root Slack message only after issue creation succeeds (skip for low-content/no-issue classifications).
 
 ### Phase 6: Observability + ops
 1. Metrics: events received/processed, LLM latency, issues created.
 2. Error handling and retries for Slack and GitHub APIs.
 3. Protect sensitive data in logs.
+4. Implement rate-limit handling with exponential backoff, jitter, and max retry budget for Slack/GitHub/LLM APIs.
+
 
 ## Questions / Clarifications
-1. Should we **only** use a GitHub App, or keep OAuth app flow (`/github/login`, `/github/callback`) for admin setup? The spec mixes both.
-2. Which channels in Liberty Labs should be in scope initially? (Need allowlist/denylist config.)
-3. What is the canonical list of maintainer Slack user IDs for unanswered detection? Where should it live (env var vs config file)?
-4. Should we store full Slack payloads (for auditing) or only normalized message/thread records?
-5. Is there a preferred LLM provider and prompt template style (system + user messages vs a single prompt)?
-6. Should we react only when issue creation succeeds, or also when a thread is classified as low-content/no-issue?
+1. Which channels in Liberty Labs should be in scope initially? (Need allowlist/denylist config.)
+2. What is the canonical list of maintainer Slack user IDs for unanswered detection? Where should it live (env var vs config file)?
+3. Should we store full Slack payloads (for auditing) or only normalized message/thread records?
+4. Is there a preferred LLM provider and prompt template style (system + user messages vs a single prompt)?
