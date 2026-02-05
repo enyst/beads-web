@@ -44,9 +44,10 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 
 ### Request Flow (GitHub App)
 1. Admin installs the GitHub App in the target org/repositories.
-2. GitHub redirects to a setup callback endpoint with the installation ID.
-3. Service stores the installation ID and exchanges the app's JWT for an installation token when it needs to create issues.
-4. Installation tokens are short-lived and generated on demand for issue creation.
+2. GitHub redirects to a setup callback endpoint with the installation ID and `state`.
+3. Require a single-use `state` nonce generated when initiating installation; validate exact match + expiry in the callback handler before persisting the installation ID.
+4. Service stores the installation ID and exchanges the app's JWT for an installation token when it needs to create issues.
+5. Installation tokens are short-lived and generated on demand for issue creation.
 
 ## Slack Integration
 
@@ -103,6 +104,7 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 
 ### Reactions to Slack
 - After successful issue creation, add `:+1:` reaction to the root Slack message.
+- Skip reactions for low-content or "no-issue" classifications.
 
 ## LLM Classification
 
@@ -112,7 +114,15 @@ Build a FastAPI service (Python 3.13) that subscribes to Slack Events API for th
 - Optional: message attachments and blocks, summarized to text.
 
 ### Output Schema
-LLM should return JSON with:
+LLM should return JSON with required fields and validated ranges:
+- `low_content`: boolean
+- `categories`: non-empty array of known category strings
+- `channel.id`/`channel.name`: required strings
+- `repository.confidence` and candidate `score`: floats in `[0, 1]`
+- `repository.name`/`repository.org`: required strings
+- `rationale`: required string
+
+Example:
 ```json
 {
   "low_content": false,
@@ -215,9 +225,9 @@ A thread is “unanswered” when:
   - Enqueues processing job.
 
 ### GitHub App
-- `GET /github/install` → redirects to GitHub App installation.
-- `GET /github/callback` → receives installation callback and stores installation ID.
-- `POST /github/token` → generates a new installation token on demand.
+- `GET /github/install` → redirects to GitHub App installation and issues a single-use `state` nonce.
+- `GET /github/callback` → receives installation callback, validates `state`, and stores installation ID.
+- `POST /github/token` → generates a new installation token on demand (internal-only; require service auth/RBAC).
 
 ### Health
 - `GET /healthz` → simple uptime check.

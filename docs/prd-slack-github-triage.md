@@ -22,12 +22,16 @@ Slack discussions that require engineering follow-up are easy to miss, leading t
 - Maintainer-reported reduction in missed requests
 
 ## Scope (MVP)
-- Ingest Slack message events for selected channels.
+- Ingest Slack message events for selected channels (default allowlist: `#openhands`, `#agents`, `#support`).
 - Classify threads via LLM and determine repo routing.
 - Create GitHub issues via GitHub App installation tokens.
 - React in Slack only after issue creation succeeds.
 
+## Defaults
+- Maintainer IDs: `MAINTAINER_SLACK_IDS` env var (comma-separated); start with bot + core maintainers.
+- Data retention: keep message text 60 days, redact emails/phone numbers on write.
+- Rate limiting: exponential backoff with jitter, max 5 retries, honor `Retry-After`.
+
 ## Risks / Open Questions
-- Final channel allowlist and maintainer ID list
-- Data retention and PII redaction requirements
-- Rate-limit budget for Slack/GitHub/LLM providers
+- Confirm initial channel allowlist and maintainer list values.
+- Confirm legal/privacy requirements for retention and redaction.

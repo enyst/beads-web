@@ -37,6 +37,8 @@ Issues in Beads are:
 - **AI-friendly**: CLI-first design works perfectly with AI coding agents
 - **Branch-aware**: Issues can follow your branch workflow
 - **Always in sync**: Auto-syncs with your commits
+- **Merge driver required**: Run `bd onboard` (or `bd init`) before editing `.beads/issues.jsonl` so the `beads` Git merge driver is registered; `.gitattributes` enforces this driver for proper conflict resolution.
+
 
 ## Why Beads?
 

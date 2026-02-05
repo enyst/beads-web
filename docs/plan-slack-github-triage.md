@@ -11,6 +11,7 @@
 2. Confirm GitHub auth will use a GitHub App install flow (no OAuth app).
 3. Choose storage: start with SQLite for local/dev, Postgres in production (migrations via Alembic).
 4. Confirm LLM provider strategy (OpenAI/Anthropic/etc) and client library.
+   - Decision criteria: cost per 1K tokens, latency, data retention policy, and privacy controls.
 
 ### Phase 1: Project scaffolding
 1. Add FastAPI app with `/healthz` route.
