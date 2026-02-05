@@ -1,7 +1,7 @@
 # Implementation Plan: Slack → GitHub Triage Service (beads-web)
 
 ## Context
-- Source spec: `.beads/spec-slack-github-triage.md` (from OpenHands-Tab PR #944).
+- Source spec: `docs/spec-slack-github-triage.md` (from OpenHands-Tab PR #944).
 - Target app: `enyst/beads-web` (this repo).
 
 ## Plan
