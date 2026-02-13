@@ -1,0 +1,3 @@
+
+# Use bd merge for beads JSONL files (configured by `bd init` or `bd onboard` during repo setup)
+.beads/issues.jsonl merge=beads
